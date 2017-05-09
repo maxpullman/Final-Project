@@ -82,6 +82,40 @@ public:
 
 };
 
+class QTable {
+public:
+
+	double epsilon = .1; //Greedy variable
+	double alpha = .1; //Learning varaible
+	double gamma = .9;  //Q-Learning variable
+
+	vector<double> actions;
+	vector<vector<double>> StartQT;
+	vector<vector<double>> QT;
+
+	void init(grid Init) {
+	
+		for (int i = 0; i < Init.States.size(); i++) {
+			for (int j = 0; j < 4; j++) {
+				double random = SmallRand;
+				actions.push_back(random);
+			}
+			StartQT.push_back(actions);
+			actions.clear();
+		}
+		QT = StartQT;
+	}
+
+	void updateQ(double action, vector<double> reward, int NewestState, int State) {
+		//Updates the old position of the agent with new Q data after moving one state 
+		double maxQ = *max_element(QT[NewestState].begin(), QT[NewestState].end());
+		QT[State][action] = QT[State][action] + alpha*(reward.at(NewestState) + gamma*maxQ - QT[State][action]);
+		State = NewestState;
+	}
+
+};
+
+
 //Creating the agent class that decides how to move within the grid based on a goal
 class agent {
 public:
@@ -103,9 +137,7 @@ public:
 	double alpha = .1; //Learning varaible
 	double gamma = .9;  //Q-Learning variable
 
-	vector<double> actions;
-	vector<vector<double>> StartQTable;
-	vector<vector<double>> QTable;
+
 
 	void init(grid Init) {
 		//initializing the agent's position
@@ -116,16 +148,6 @@ public:
 		Episodecounter = 0;
 		Totallast10moves = 0;
 		Averagelast10moves = 0;
-		//Initializes the Q-Table for the agent
-		for (int i = 0; i < Init.States.size(); i++) {
-			for (int j = 0; j < 4; j++) {
-				double random = SmallRand;
-				actions.push_back(random);
-			}
-			StartQTable.push_back(actions);
-			actions.clear();
-		}
-		QTable = StartQTable;
 	};
 
 	void place(int x, int y) {
@@ -163,34 +185,35 @@ public:
 		State = StartingState;
 	};
 
-	void bumpercheck(grid Check, int agentxpos, int agentypos, int Movetaken) {
+	void bumpercheck(grid Check, int agentxpos, int agentypos, int Movetaken, QTable QTable) {
 		//Checks to see whether the agent's x and y coordinate position is not off the grid and if so
 		//puts the agent back on the grid and gives the Q-Table a negative value of -100 for that state and direction movement
 		if (agentxpos < 0) {
-			QTable[State][Movetaken] = -100;
+			QTable.QT[State][Movetaken] = -100;
 			positionx = 0;
 		}
 		else if (agentxpos > Check.xmax - 1) {
-			QTable[State][Movetaken] = -100;
+			QTable.QT[State][Movetaken] = -100;
 			positionx = Check.xmax - 1;
 		}
 		else {
 			positionx = agentxpos;
 		}
 		if (agentypos < 0) {
-			QTable[State][Movetaken] = -100;
+			QTable.QT[State][Movetaken] = -100;
 			positiony = 0;
 		}
 		else if (agentypos > Check.ymax - 1) {
-			QTable[State][Movetaken] = -100;
+			QTable.QT[State][Movetaken] = -100;
 			positiony = Check.ymax - 1;
 		}
 		else {
 			positiony = agentypos;
 		}
+
 	};
 
-	void agent_moves(int xp, grid fboard) {
+	void agent_moves(int xp, grid fboard, QTable QTable) {
 		double Greed = RAND;
 		int Move = 0;  //Initialize a random move up
 
@@ -203,10 +226,10 @@ public:
 		}
 		else {
 			//Take the best action in the direction dictated by the Q-table
-			double BestQ = *max_element(QTable[State].begin(), QTable[State].end());
+			double BestQ = *max_element(QTable.QT[State].begin(), QTable.QT[State].end());
 			for (int i = 0; i <= 3; i++) {
 				//cout << QTable[State][i] << endl;
-				if (QTable[State][i] == BestQ) {
+				if (QTable.QT[State][i] == BestQ) {
 					Move = i;
 				}
 			}
@@ -234,27 +257,23 @@ public:
 		moves++;
 
 		//Resets the agent if it hits a wall on the outer lines of the grid
-		bumpercheck(fboard, positionx, positiony, Move);
+		bumpercheck(fboard, positionx, positiony, Move, QTable);
 
 		//Updates the agent's position in order to update the QTable of its move
 		int NextState = positionx + positiony*xp;
 
 		//Now the QTable is updated with what the agent just did
-		updateQ(Move, fboard.Reward, NextState);
+		QTable.updateQ(Move, fboard.Reward, NextState, State);
 	};
 
-	void updateQ(double action, vector<double> reward, int NewestState) {
-		//Updates the old position of the agent with new Q data after moving one state 
-		double maxQ = *max_element(QTable[NewestState].begin(), QTable[NewestState].end());
-		QTable[State][action] = QTable[State][action] + alpha*(reward.at(NewestState) + gamma*maxQ - QTable[State][action]);
-		State = NewestState;
-	}
+	
 
-	void Runlearner(grid Matrix, int max_x, int Runs, int Episodes, ofstream &statout, int TotalEpisodes) {
+	void Runlearner(grid Matrix, int max_x, int Runs, int Episodes, ofstream &statout, int TotalEpisodes, QTable QTable) {
 
 
 		while (State != Matrix.GoalState) {
-			agent_moves(max_x, Matrix);
+			agent_moves(max_x, Matrix,QTable);
+			cout << positionx << '\t' << positiony << '\t' << State << '\t' << Matrix.GoalState << endl;
 		}
 
 		/*cout << "Goal: " << Matrix.goalx << ", " << Matrix.goaly << endl;
@@ -281,19 +300,16 @@ public:
 
 };
 
-class QTable {
-public:
 
-};
 
 
 
 
 
 //Declared Tests and functions
-void TestD(agent Da, grid Dg);
+void TestD(QTable QTable, grid Dg);
 
-void TestE(agent Ea);
+void TestE(QTable E, agent Ea);
 
 void TestF(agent Fa, grid Fg);
 
@@ -302,7 +318,7 @@ int main() {
 	srand(time(NULL));
 	int x; //Xmax
 	int y; //Ymax
-	int Episodes = 250;
+	int Episodes = 20;
 
 	//Asking for x and y dimensions to create the grid 
 	cout << "Indicate the grid size in the x-direction (positive integer only): ";
@@ -335,16 +351,21 @@ int main() {
 	Main2.init(board);
 	Main2.place(x, y);
 
+	//Creating the Master Command QTable
+	QTable Master;
+	Master.init(board);
+
+
 	cout << "Agent's State: " << Main.State << "," << Main2.State << endl;
 	cout << "Goal State: " << board.GoalState << endl;
 
 	//Running the Q-learner 30 statistical times over a certain amount of episodes 
-	for (int i = 0; i < 30; i++) {
+	for (int i = 0; i < 5; i++) {
 		for (int j = 0; j < Episodes; j++) {
 
-			Main.Runlearner(board, x, i, j, stat, Episodes);
+			Main.Runlearner(board, x, i, j, stat, Episodes,Master);
 			//Checks to see if agent's position was reset and the Q-table was not 
-			TestE(Main);
+			TestE(Master, Main);
 			if (j == Episodes - 1) {
 				TestF(Main, board);
 			}
@@ -353,9 +374,8 @@ int main() {
 		Main.Episodecounter = 0;
 		Main.Totallast10moves = 0;
 		Main.Averagelast10moves = 0;
-		Main.QTable = Main.StartQTable;
 		//Test for each statistical run that the Q-table doesnt exceed the max reward of 100 at any point
-		TestD(Main, board);
+		TestD(Master, board);
 	}
 
 	//Tests the alternative state representation for the agent built in the function itself
@@ -373,21 +393,20 @@ int main() {
 
 //Tests and function parameters for the rest of the program 
 //Test D: No Q-value in the Q-table ever exceeds the given reward of 100 by reaching the goal state
-void TestD(agent Da, grid Dg) {
+void TestD(QTable QTable, grid Dg) {
 	int Directions = 4;
 
 	//Runs through entire Q-table and checks the convergent reward
 	for (int i = 0; i < size(Dg.States); i++) {
 		for (int j = 0; j < Directions; j++) {
-			assert(Da.QTable[i][j] <= 100);
+			assert(QTable.QT[i][j] <= 100);
 		}
 	}
 }
 
 //Test E: When the agent reaches the goal state, it is reset to the initial state and is identical to a freshly initialized agent, except for the Q-values
-void TestE(agent Ea) {
+void TestE(QTable E,agent Ea) {
 	assert(Ea.State == Ea.StartingState);
-	assert(Ea.QTable != Ea.StartQTable);
 }
 
 //Test F: The agent is capable of using Q-learning to get to the goal in a near-optimal number of steps
